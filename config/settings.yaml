@@ -1,0 +1,55 @@
+# Novel Agent 配置文件
+
+# LLM 配置
+LLM:
+  provider: "openai"  # openai / anthropic / local
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 4000
+  
+  # OpenAI
+  openai_api_key: "${OPENAI_API_KEY}"
+  openai_base_url: "https://api.openai.com/v1"
+  
+  # Anthropic
+  anthropic_api_key: "${ANTHROPIC_API_KEY}"
+
+# Agent 配置
+AGENTS:
+  max_concurrent: 8
+  timeout_seconds: 30
+  memory_limit_mb: 512
+  
+  # 写作配置
+  chapter_min_words: 3000
+  chapter_max_words: 5000
+  auto_retry_times: 3
+
+# 审核配置
+REVIEW:
+  min_pass_score: 7.0
+  instant_review: true
+  deep_review: true
+  
+  # 敏感词过滤
+  sensitivity_enabled: true
+
+# 数据库配置
+DATABASE:
+  type: "sqlite"
+  path: "./novel_agent.db"
+  
+  # ChromaDB 向量存储
+  vector_store:
+    type: "chroma"
+    persist_directory: "./chroma_db"
+
+# 前端配置
+FRONTEND:
+  port: 3000
+  api_url: "http://localhost:8000"
+
+# 日志配置
+LOGGING:
+  level: "INFO"
+  file: "./logs/novel_agent.log"

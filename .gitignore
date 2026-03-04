@@ -1,0 +1,4 @@
+node_modules/
+*.db
+chroma_db/
+__pycache__/
