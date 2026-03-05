@@ -284,10 +284,14 @@ async def plan_novel(novel_id: int, background_tasks: BackgroundTasks):
             await manager.send_message(create_stage_start_message(AgentStage.COMPLETED, 1, "规划完成"), novel_id)
             await manager.send_message(create_overall_progress_message(AgentStage.COMPLETED, 100, 100, {"status": "planned"}), novel_id)
         
-        # 保存结果
+        # 保存结果 - 将volumes和overall_rhythm包含在outline中
+        outline_data = result.get("outline", {})
+        outline_data["volumes"] = result.get("volumes", [])
+        outline_data["overall_rhythm"] = result.get("overall_rhythm", {})
+        
         store.update_novel(novel_id, {
             "status": "planned",
-            "outline": result.get("outline", {}),
+            "outline": outline_data,
             "characters": result.get("characters", []),
             "world_settings": result.get("world_settings", {}),
             "foreshadowing": result.get("foreshadowing", []),

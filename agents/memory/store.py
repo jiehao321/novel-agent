@@ -96,6 +96,30 @@ class MemoryStore:
         
         self.conn.commit()
     
+    def update_novel(self, novel_id: int, updates: Dict[str, Any]) -> bool:
+        """更新小说信息"""
+        cursor = self.conn.cursor()
+        
+        # 构建动态更新语句
+        set_parts = []
+        values = []
+        for key in ["title", "genre", "outline", "status", "characters", "world_settings", "foreshadowing"]:
+            if key in updates:
+                set_parts.append(f"{key} = ?")
+                if key == "outline":
+                    values.append(json.dumps(updates[key], ensure_ascii=False))
+                else:
+                    values.append(updates[key])
+        
+        if not set_parts:
+            return False
+        
+        values.append(novel_id)
+        query = f"UPDATE novels SET {', '.join(set_parts)} WHERE id = ?"
+        cursor.execute(query, values)
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
     def save_novel(self, novel: Dict[str, Any]) -> int:
         """保存小说"""
         cursor = self.conn.cursor()
