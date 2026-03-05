@@ -9,15 +9,23 @@ import json
 import os
 
 
+# 全局客户端缓存，用于测试环境
+_global_clients: Dict[str, chromadb.PersistentClient] = {}
+
+
 class VectorMemory:
     """ChromaDB 向量记忆"""
     
     def __init__(self, persist_directory: str = "./chroma_db"):
         self.persist_directory = persist_directory
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            anonymized_telemetry=False
-        ))
+        
+        # 使用持久化客户端，避免测试冲突
+        if persist_directory not in _global_clients:
+            _global_clients[persist_directory] = chromadb.PersistentClient(
+                path=persist_directory
+            )
+        self.client = _global_clients[persist_directory]
+        
         self._init_collections()
     
     def _init_collections(self):
@@ -155,11 +163,15 @@ class VectorMemory:
             return []
         
         formatted = []
-        for i, id_ in enumerate(results["ids"]):
+        ids_list = results["ids"][0] if results.get("ids") and isinstance(results["ids"][0], list) else results.get("ids", [])
+        docs_list = results["documents"][0] if results.get("documents") and isinstance(results["documents"][0], list) else results.get("documents", [])
+        metas_list = results["metadatas"][0] if results.get("metadatas") and isinstance(results["metadatas"][0], list) else results.get("metadatas", [])
+        
+        for i, id_ in enumerate(ids_list):
             formatted.append({
                 "id": id_,
-                "content": results["documents"][i] if i < len(results["documents"]) else "",
-                "metadata": results["metadatas"][i] if i < len(results["metadatas"]) else {}
+                "content": docs_list[i] if i < len(docs_list) else "",
+                "metadata": metas_list[i] if i < len(metas_list) else {}
             })
         
         return formatted
