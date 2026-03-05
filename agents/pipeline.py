@@ -119,12 +119,19 @@ class NovelAgentPipeline:
             if isinstance(char, dict):
                 self.store.save_character(self.current_novel.id, char)
         
+        # 保存卷结构
+        volumes = result.get("volumes", [])
+        if volumes:
+            self.store.save_volumes(self.current_novel.id, volumes)
+        
         self.current_novel.status = "planned"
         
         return {
             "status": "success",
             "title": self.current_novel.title,
             "outline": self.current_novel.outline,
+            "volumes": volumes,
+            "overall_rhythm": result.get("overall_rhythm", {}),
             "characters": self.current_novel.characters,
             "world_settings": self.current_novel.world_settings,
             "foreshadowing": self.current_novel.foreshadowing

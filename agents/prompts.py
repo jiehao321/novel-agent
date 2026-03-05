@@ -15,6 +15,7 @@ OUTLINE_PROMPT = """你是一个专业的小说大纲设计师。根据用户需
 3. 章节规划：{total_chapters}章，每章有核心事件
 4. 高潮分布：至少{total_chapters}个高潮点
 5. 伏笔系统：至少10个伏笔，有埋设和回收计划
+6. 卷结构：将章节分成多卷，每卷30-50章，每卷有独立的主题和冲突
 
 ## 输出格式
 请返回 JSON 格式的大纲：
@@ -23,6 +24,8 @@ OUTLINE_PROMPT = """你是一个专业的小说大纲设计师。根据用户需
     "title": "小说标题",
     "genre": "题材类型",
     "theme": "核心主题",
+    "total_chapters": {total_chapters},
+    "total_volumes": 3-5卷,
     "main_plot": {{
         "beginning": "开头",
         "development": "发展",
@@ -33,13 +36,117 @@ OUTLINE_PROMPT = """你是一个专业的小说大纲设计师。根据用户需
         {{"name": "支线1", "description": "描述"}}
     ],
     "chapters": [
-        {{"num": 1, "title": "章节标题", "core_event": "核心事件", "foreshadowing": []}}
+        {{"num": 1, "title": "章节标题", "core_event": "核心事件", "volume": 1, "foreshadowing": []}}
     ],
     "climax_points": [1, 20, 50, 80, 100],
     "foreshadowing": [
         {{"id": "fs_1", "description": "伏笔描述", "plant_chapter": 1, "reveal_chapter": 50}}
     ]
 }}
+```"""
+
+VOLUME_PROMPT = """你是一个专业的小说卷结构规划师。根据大纲设计极度详细的卷结构。
+
+## 大纲信息
+{outline}
+
+## 用户需求
+{requirement}
+
+## 要求
+将{total_chapters}章分成{total_volumes}卷，每卷{target_chapters_per_volume}章左右。
+
+每一卷必须包含以下极度详细的信息：
+
+### 1. 卷基础信息
+- 卷名：简洁有力的标题
+- 卷简介：200-300字介绍
+- 起止章节：卷包含的章节范围
+- 卷主题：该卷的核心主题
+- 卷核心冲突：该卷的主要矛盾
+
+### 2. 卷核心流程
+- 这一卷的核心目标是什么，主角要完成什么（50-100字）
+
+### 3. 剧情走向
+- 从开头到结尾的整体变化，详细描述每一阶段（200-400字）
+
+### 4. 章节规划（极度详细）
+每卷下的章节要分组，每组10章左右，每组包含：
+- 组标题：如"第1-10章：山村平静生活"
+- 每章详细规划（必须包含以下5项）：
+  - 章节内容概述：150-200字
+  - 冲突点：人物矛盾、困难、阻碍（每章至少1个冲突）
+  - 爽点：打脸、逆袭、突破、装逼、收获（每章至少1个爽点）
+  - 钩子：章节结尾的悬念（每章必须有钩子）
+  - 情绪曲线：平缓/紧张/激烈/回落
+
+### 5. 节奏曲线
+- 每卷的节奏：铺垫% → 发展% → 高潮% → 回落%
+
+## 输出格式
+请返回 JSON 格式的卷结构列表：
+```json
+[
+    {{
+        "volume_num": 1,
+        "title": "少年崛起",
+        "introduction": "卷简介",
+        "start_chapter": 1,
+        "end_chapter": {target_chapters_per_volume},
+        "theme": "逆天改命",
+        "core_conflict": "与命运抗争",
+        "core_goal": "主角从山村少年成长为门派核心弟子",
+        "plot_direction": "山村生活 → 意外发现古玉 → 触发传承 → 加入门派 → 修炼入门 → 门派大比 → 一鸣惊人 → 获得秘境资格",
+        "chapter_groups": [
+            {{
+                "title": "第1-10章：山村平静生活",
+                "chapters": [
+                    {{
+                        "chapter_num": 1,
+                        "title": "陨落的天才",
+                        "summary": "章节内容概述150-200字...",
+                        "conflict": "主角修为尽失，被族人嘲笑",
+                        "爽点": "主角意外激活古玉，展现天赋",
+                        "hook": "古玉显示唯有离开此地才能解开身世之谜",
+                        "emotion_curve": "平缓→紧张→激烈"
+                    }},
+                    {{
+                        "chapter_num": 2,
+                        "title": "神秘的传承",
+                        "summary": "章节内容概述...",
+                        "conflict": "村长儿子要抢古玉",
+                        "爽点": "主角意外激活古玉，获得传承",
+                        "hook": "古玉中传来神秘声音",
+                        "emotion_curve": "紧张→激烈→回落"
+                    }}
+                ]
+            }},
+            {{
+                "title": "第11-20章：身世之谜",
+                "chapters": []
+            }}
+        ],
+        "rhythm_curve": {{
+            "type": "standard",
+            "preparation": 80,
+            "development": 0,
+            "climax": 20,
+            "falling": 0,
+            "points": [
+                {{"position": 0, "intensity": 3, "phase": "铺垫"}},
+                {{"position": 25, "intensity": 5, "phase": "铺垫"}},
+                {{"position": 50, "intensity": 7, "phase": "铺垫"}},
+                {{"position": 75, "intensity": 8, "phase": "发展"}},
+                {{"position": 90, "intensity": 10, "phase": "高潮"}},
+                {{"position": 100, "intensity": 6, "phase": "回落"}}
+            ]
+        }},
+        "character_appearances": [
+            {{"name": "林星河", "status": "出场", "description": "主角"}}
+        ]
+    }}
+]
 ```"""
 
 CHARACTER_PROMPT = """你是一个专业的小说角色设计师。根据大纲创作完整的角色档案。

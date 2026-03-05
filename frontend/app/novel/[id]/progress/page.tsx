@@ -1,143 +1,223 @@
 'use client';
+import { useState, useEffect } from 'react';
+import { Card, Progress, Row, Col, Tag, Button, Spin, Alert, Timeline, Space, Statistic } from 'antd';
+import { SyncOutlined } from '@ant-design/icons';
+import { novelAPI } from '../../../../lib/api';
+import { useProgress } from '../../../../lib/useWebSocket';
 
-// 实时进度页面
-import { useState, useEffect, useRef } from 'react';
-import { Card, Progress, Button, List, Tag, Spin, message, Result } from 'antd';
-import { SyncOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+// 状态图标组件
+const WifiIcon = ({ status }: { status: string }) => {
+  const style = status === 'connected' ? { color: '#52c41a' } : status === 'connecting' ? {} : { color: '#ff4d4f' };
+  return <span style={style}>{status === 'connected' ? '🟢' : status === 'connecting' ? '🟡' : '🔴'}</span>;
+};
 
-export default function WritingProgress({ novelId }: { novelId: number }) {
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const [progress, setProgress] = useState({ current: 0, total: 0, chapter: '', status: '' });
-  const [chapters, setChapters] = useState<any[]>([]);
-  const [connected, setConnected] = useState(false);
-  const [completed, setCompleted] = useState(false);
+// 完成图标
+const CheckIcon = ({ style }: { style?: React.CSSProperties }) => <span style={style}>✅</span>;
+
+// 失败图标
+const FailIcon = ({ style }: { style?: React.CSSProperties }) => <span style={style}>❌</span>;
+
+export default function RealTimeProgress({ params }: { params: { id: string } }) {
+  const novelId = parseInt(params.id);
+  
+  // 使用 WebSocket 进度 Hook
+  const {
+    connectionStatus,
+    isConnected,
+    error,
+    overallProgress,
+    currentStage,
+    currentStageName,
+    stageProgress,
+    stages,
+    chapterProgress,
+    reconnect,
+    disconnect
+  } = useProgress(novelId);
+  
+  const [novel, setNovel] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 连接 WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws/${novelId}`;
-    
-    const websocket = new WebSocket(wsUrl);
-    
-    websocket.onopen = () => {
-      console.log('WebSocket connected');
-      setConnected(true);
-      message.success('实时连接已建立');
-    };
-    
-    websocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'progress') {
-          setProgress(data.data);
-        } else if (data.type === 'chapter_complete') {
-          setChapters(prev => [...prev, data.data]);
-        } else if (data.type === 'completed') {
-          setCompleted(true);
-          message.success('所有章节写作完成！');
-        } else if (data.type === 'error') {
-          message.error(data.message);
-        }
-      } catch (e) {
-        console.error('Failed to parse message', e);
-      }
-    };
-    
-    websocket.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-    };
-    
-    websocket.onerror = (error) => {
-      console.error('WebSocket error', error);
-      message.error('连接失败');
-    };
-    
-    setWs(websocket);
-    
-    return () => {
-      websocket.close();
-    };
+    novelAPI.getNovel(novelId)
+      .then(r => setNovel(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [novelId]);
 
-  const startWriting = async () => {
-    try {
-      const response = await fetch(`/api/novel/${novelId}/write-all`, {
-        method: 'POST'
-      });
-      const data = await response.json();
-      
-      if (data.status === 'completed') {
-        message.success('写作任务已启动');
-      }
-    } catch (error) {
-      message.error('启动失败');
-    }
+  // 获取连接状态显示
+  const getStatusIcon = () => {
+    return <WifiIcon status={connectionStatus} />;
   };
 
+  const getStatusText = () => {
+    const statusMap = {
+      disconnected: '未连接',
+      connecting: '连接中...',
+      connected: '实时同步',
+      error: '连接错误'
+    };
+    return statusMap[connectionStatus] || connectionStatus;
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: 100 }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const chapters = novel?.outline?.chapters || [];
+  const totalChapters = chapters.length;
+
   return (
-    <div style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
-      <Card
-        title="写作进度"
-        extra={
-          <Tag color={connected ? 'green' : 'red'}>
-            {connected ? '已连接' : '未连接'}
-          </Tag>
-        }
-      >
-        {/* 进度条 */}
-        <div style={{ marginBottom: 30 }}>
-          <Progress 
-            percent={progress.total > 0 ? Math.round(progress.current / progress.total * 100) : 0} 
-            status={completed ? 'success' : 'active'}
-            format={() => `${progress.current}/${progress.total} 章`}
-          />
-          <p style={{ textAlign: 'center', color: '#888' }}>
-            {progress.chapter || '等待开始...'}
-          </p>
-        </div>
-        
-        {/* 操作按钮 */}
-        {!completed && (
-          <div style={{ textAlign: 'center', marginBottom: 30 }}>
-            <Button 
-              type="primary" 
-              icon={<SyncOutlined />}
-              onClick={startWriting}
-              loading={progress.status === 'writing'}
-            >
-              开始写作
-            </Button>
-          </div>
+    <div style={{ padding: 20, background: '#f5f5f5', minHeight: '100vh' }}>
+      <Row gutter={[16, 16]}>
+        {/* 顶部状态栏 */}
+        <Col span={24}>
+          <Card size="small">
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Space>
+                  {getStatusIcon()}
+                  <span>{getStatusText()}</span>
+                  {!isConnected && connectionStatus !== 'connecting' && (
+                    <Button size="small" onClick={reconnect}>重连</Button>
+                  )}
+                </Space>
+              </Col>
+              <Col>
+                <Tag color="blue">{novel?.title || '未命名'}</Tag>
+                <Tag>{novel?.genre}</Tag>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+
+        {/* 总体进度 */}
+        <Col span={24}>
+          <Card title="总体进度">
+            <Progress 
+              percent={overallProgress} 
+              status={overallProgress >= 100 ? 'success' : 'active'}
+              strokeColor={{
+                '0%': '#108ee9',
+                '100%': '#52c41a',
+              }}
+            />
+            <Row gutter={16} style={{ marginTop: 16 }}>
+              <Col span={6}>
+                <Statistic 
+                  title="当前阶段" 
+                  value={currentStageName} 
+                  valueStyle={{ fontSize: 18, color: '#1890ff' }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title="阶段进度" 
+                  value={stageProgress} 
+                  suffix="%" 
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title="章节进度" 
+                  value={`${chapterProgress.current || 0}/${chapterProgress.total || totalChapters}`} 
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title="总章节" 
+                  value={totalChapters} 
+                />
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+
+        {/* 阶段列表 */}
+        <Col span={24}>
+          <Card title="执行阶段">
+            <Timeline
+              items={stages.length > 0 ? stages.map((s: any) => ({
+                color: s.completed ? 'green' : s.id === currentStage ? 'blue' : 'gray',
+                children: (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{s.name}</span>
+                    {s.completed && <CheckIcon />}
+                    {s.id === currentStage && (
+                      <span style={{ color: '#1890ff' }}>{stageProgress}%</span>
+                    )}
+                  </div>
+                )
+              })) : [
+                { color: 'gray', children: '等待开始...' }
+              ]}
+            />
+          </Card>
+        </Col>
+
+        {/* 章节进度 */}
+        <Col span={24}>
+          <Card title="章节写作进度">
+            {totalChapters > 0 ? (
+              <Row gutter={[8, 8]}>
+                {chapters.map((ch: any, idx: number) => {
+                  const isCurrentChapter = chapterProgress.current === ch.num;
+                  const isCompleted = chapterProgress.current > ch.num || (idx === 0 && chapterProgress.current === 0);
+                  const isWriting = isCurrentChapter && chapterProgress.progress < 100;
+                  
+                  return (
+                    <Col span={4} key={ch.num}>
+                      <Card 
+                        size="small"
+                        style={{ 
+                          background: isCurrentChapter ? '#e6f7ff' : isCompleted ? '#f6ffed' : '#fafafa',
+                          borderColor: isCurrentChapter ? '#1890ff' : undefined
+                        }}
+                      >
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontWeight: 'bold' }}>第{ch.num}章</div>
+                          <div style={{ fontSize: 12, color: '#666' }}>{ch.title}</div>
+                          {isWriting && (
+                            <Progress 
+                              percent={chapterProgress.progress} 
+                              size="small" 
+                              style={{ marginTop: 4 }}
+                            />
+                          )}
+                          {isCompleted && !isWriting && (
+                            <CheckIcon style={{ marginTop: 4 }} />
+                          )}
+                        </div>
+                      </Card>
+                    </Col>
+                  );
+                })}
+              </Row>
+            ) : (
+              <Alert message="暂无章节数据，请先生成大纲" type="info" />
+            )}
+          </Card>
+        </Col>
+
+        {/* 错误提示 */}
+        {error && (
+          <Col span={24}>
+            <Alert 
+              message="连接错误" 
+              description={error} 
+              type="error" 
+              showIcon 
+              action={
+                <Button size="small" onClick={reconnect}>重试</Button>
+              }
+            />
+          </Col>
         )}
-        
-        {/* 章节列表 */}
-        <List
-          header="已完成的章节"
-          dataSource={chapters}
-          renderItem={(item: any) => (
-            <List.Item>
-              <List.Item.Meta
-                title={`第${item.chapter_num}章`}
-                description={`${item.word_count}字`}
-              />
-              <CheckCircleOutlined style={{ color: '#52c41a' }} />
-            </List.Item>
-          )}
-          locale={{ emptyText: '暂无完成的章节' }}
-        />
-        
-        {/* 完成提示 */}
-        {completed && (
-          <Result
-            status="success"
-            title="写作完成！"
-            subTitle={`共完成 ${chapters.length} 章`
-            }
-          />
-        )}
-      </Card>
+      </Row>
     </div>
   );
 }

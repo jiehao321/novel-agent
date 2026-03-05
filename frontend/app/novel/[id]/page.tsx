@@ -1,218 +1,196 @@
 'use client';
-
-// 小说详情页 - 优化版
 import { useState, useEffect } from 'react';
-import { Card, Tabs, Divider, Table, Button, Spin, message, Tag, Menu, Layout, Typography, Descriptions, Progress, Timeline } from 'antd';
-import { BookOutlined, ReadOutlined, CheckCircleOutlined, DashboardOutlined, EditOutlined, SettingOutlined, HomeOutlined } from '@ant-design/icons';
-import Link from 'next/link';
+import { Card, Tabs, Table, Spin, message, Tag, Descriptions, Button, Modal, Input, Space, Dropdown } from 'antd';
 import { useRouter } from 'next/navigation';
-import { novelAPI } from '../../lib/api';
+const { TextArea } = Input;
 
-const { Header, Content, Sider } = Layout;
-const { Title, Paragraph } = Typography;
+const API_BASE = 'http://localhost:8000';
 
-export default function NovelDetail({ novelId }: { novelId: number }) {
+export default function NovelDetail({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [novel, setNovel] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('outline');
+  const [writingChapter, setWritingChapter] = useState<number | null>(null);
+  const [reviewModal, setReviewModal] = useState<{visible: boolean, chapterNum: number, content: string}>({visible: false, chapterNum: 0, content: ''});
+  const [rollbackModal, setRollbackModal] = useState<{visible: boolean, chapterNum: number, versions: any[]}>({visible: false, chapterNum: 0, versions: []});
+  const [reviewNote, setReviewNote] = useState('');
   const router = useRouter();
+  const novelId = parseInt(params.id);
 
-  useEffect(() => {
-    loadNovel();
-  }, [novelId]);
+  const fetchNovel = () => {
+    fetch(`${API_BASE}/api/novel/${novelId}`).then(r=>r.json()).then(setNovel).catch(()=>message.error('加载失败')).finally(()=>setLoading(false));
+  };
 
-  const loadNovel = async () => {
+  useEffect(() => { fetchNovel(); }, []);
+
+  const writeChapter = async (chapterNum: number) => {
+    setWritingChapter(chapterNum);
     try {
-      const res = await novelAPI.getNovel(novelId);
-      setNovel(res.data);
-    } catch (error) {
-      message.error('加载失败');
+      const res = await fetch(`${API_BASE}/api/novel/${novelId}/chapter/${chapterNum}/write`, { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        message.error(`写作失败: ${data.error}`);
+      } else {
+        message.success(`章节${chapterNum}写作完成 (重试${data.retries || 0}次)`);
+        fetchNovel();
+      }
+    } catch (e: any) {
+      message.error(`异常: ${e.message}`);
     } finally {
-      setLoading(false);
+      setWritingChapter(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ 
-        height: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: '#f5f5f5'
-      }}>
-        <Spin size="large" tip="加载中..." />
-      </div>
-    );
-  }
-
-  if (!novel) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <Title level={4}>小说不存在</Title>
-        <Link href="/"><Button type="primary">返回首页</Button></Link>
-      </div>
-    );
-  }
-
-  const outline = novel.outline || {};
-  const chapters = outline.chapters || [];
-  const characters = novel.characters || [];
-  const mainPlot = outline.main_plot || {};
-
-  // 菜单项
-  const menuItems = [
-    {
-      key: 'home',
-      icon: <HomeOutlined />,
-      label: <Link href="/">首页</Link>,
-    },
-    {
-      key: 'outline',
-      icon: <EditOutlined />,
-      label: <Link href={`/novel/${novelId}/outline`}>大纲确认</Link>,
-    },
-    {
-      key: 'progress',
-      icon: <ReadOutlined />,
-      label: <Link href={`/novel/${novelId}/progress`}>写作进度</Link>,
-    },
-    {
-      key: 'review',
-      icon: <CheckCircleOutlined />,
-      label: <Link href={`/novel/${novelId}/review`}>审核详情</Link>,
-    },
-    {
-      key: 'monitor',
-      icon: <DashboardOutlined />,
-      label: <Link href={`/novel/${novelId}/monitor`}>质量监控</Link>,
-    },
-  ];
-
-  // 大纲Tab内容
-  const OutlineContent = () => (
-    <Card title="📖 主线剧情" size="small">
-      <Descriptions column={2} size="small">
-        <Descriptions.Item label="开头">{mainPlot.beginning || '-'}</Descriptions.Item>
-        <Descriptions.Item label="高潮">{mainPlot.climax || '-'}</Descriptions.Item>
-        <Descriptions.Item label="发展">{mainPlot.development || '-'}</Descriptions.Item>
-        <Descriptions.Item label="结局">{mainPlot.ending || '-'}</Descriptions.Item>
-      </Descriptions>
-      
-      <Divider />
-      
-      <Title level={5}>📚 章节规划</Title>
-      <Timeline>
-        {chapters.map((ch: any, idx: number) => (
-          <Timeline.Item key={idx} color={idx === 0 ? 'green' : 'blue'}>
-            <Tag>第{ch.num}章</Tag> {ch.title} - {ch.core_event}
-          </Timeline.Item>
-        ))}
-      </Timeline>
-    </Card>
-  );
-
-  // 角色Tab内容
-  const CharactersContent = () => (
-    <Card title="👥 角色阵容" size="small">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
-        {characters.map((char: any, idx: number) => (
-          <Card key={idx} size="small" hoverable>
-            <Tag color={char.role === '主角' ? 'red' : 'blue'}>{char.role}</Tag>
-            <Title level={5} style={{ marginTop: 8 }}>{char.name}</Title>
-            <Paragraph ellipsis={{ rows: 2 }} style={{ fontSize: 12, color: '#888' }}>
-              {char.psychology?.core_motivation || '暂无描述'}
-            </Paragraph>
-          </Card>
-        ))}
-      </div>
-    </Card>
-  );
-
-  // 章节Tab内容
-  const ChaptersContent = () => (
-    <Card 
-      title="📖 章节列表"
-      extra={
-        <Link href={`/novel/${novelId}/progress`}>
-          <Button type="primary" icon={<ReadOutlined />}>写作进度</Button>
-        </Link>
+  const requestReview = async (chapterNum: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/novel/${novelId}/chapter/${chapterNum}/request-review`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        message.success('已提交人工复审请求');
+        fetchNovel();
+      } else {
+        message.error(data.detail || '请求失败');
       }
-    >
-      <Table
-        dataSource={chapters}
-        rowKey="num"
-        pagination={{ pageSize: 10 }}
-        columns={[
-          { title: '章节', dataIndex: 'num', width: 60, render: (n: number) => <Tag>{n}</Tag> },
-          { title: '标题', dataIndex: 'title' },
-          { title: '核心事件', dataIndex: 'core_event', ellipsis: true },
-          { 
-            title: '伏笔', 
-            dataIndex: 'foreshadowing',
-            render: (fs: any) => fs?.length > 0 ? <Tag color="orange">{fs.length}个</Tag> : '-'
-          },
-          {
-            title: '操作',
-            render: (_, record: any) => (
-              <Button size="small" type="link">查看</Button>
-            )
-          }
-        ]}
-      />
-    </Card>
-  );
+    } catch (e: any) {
+      message.error(`异常: ${e.message}`);
+    }
+  };
 
-  const tabItems = [
-    { key: 'outline', label: '📋 大纲', children: <OutlineContent /> },
-    { key: 'characters', label: '👥 角色', children: <CharactersContent /> },
-    { key: 'chapters', label: '📖 章节', children: <ChaptersContent /> },
+  const showRollbackVersions = async (chapterNum: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/novel/${novelId}/chapter/${chapterNum}/versions`);
+      const data = await res.json();
+      setRollbackModal({ visible: true, chapterNum, versions: data.versions || [] });
+    } catch (e: any) {
+      message.error(`获取版本失败: ${e.message}`);
+    }
+  };
+
+  const doRollback = async (targetVersion?: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/novel/${novelId}/chapter/${rollbackModal.chapterNum}/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chapter_num: rollbackModal.chapterNum, target_version: targetVersion })
+      });
+      const data = await res.json();
+      if (data.success) {
+        message.success(`已回滚到版本${data.version_num}`);
+        setRollbackModal({ visible: false, chapterNum: 0, versions: [] });
+        fetchNovel();
+      } else {
+        message.error(data.detail || '回滚失败');
+      }
+    } catch (e: any) {
+      message.error(`异常: ${e.message}`);
+    }
+  };
+
+  const viewChapterContent = async (chapterNum: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/novel/${novelId}/chapter/${chapterNum}`);
+      const data = await res.json();
+      setReviewModal({ visible: true, chapterNum, content: data.content || '' });
+    } catch (e: any) {
+      message.error(`获取内容失败: ${e.message}`);
+    }
+  };
+
+  if (loading) return <div style={{padding:100,textAlign:'center'}}><Spin/></div>;
+  const outline = novel?.outline || {}; 
+  const chapters = outline.chapters || []; 
+  const chars = novel?.characters || [];
+  const chapterDetails = novel?.chapter_details || [];
+
+  const getChapterStatus = (num: number) => {
+    const detail = chapterDetails.find((c: any) => c.chapter_num === num);
+    return detail?.status || 'not_started';
+  };
+
+  const getStatusTag = (status: string) => {
+    const tagMap: Record<string, {color: string, text: string}> = {
+      'not_started': {color: 'default', text: '未开始'},
+      'draft': {color: 'blue', text: '草稿'},
+      'pending_review': {color: 'orange', text: '待审核'},
+      'approved': {color: 'green', text: '已通过'},
+      'rejected': {color: 'red', text: '已拒绝'},
+      'failed': {color: 'red', text: '失败'},
+      'rolled_back': {color: 'purple', text: '已回滚'},
+      'needs_revision': {color: 'orange', text: '需修改'},
+    };
+    const t = tagMap[status] || {color: 'default', text: status};
+    return <Tag color={t.color}>{t.text}</Tag>;
+  };
+
+  const chapterColumns = [
+    { title: '章', dataIndex: 'num', width: 50, key: 'num' },
+    { title: '标题', dataIndex: 'title', key: 'title' },
+    { title: '状态', key: 'status', render: (_: any, r: any) => getChapterStatus(r.num) },
+    { 
+      title: '操作', 
+      key: 'actions',
+      render: (_: any, r: any) => {
+        const status = getChapterStatus(r.num);
+        return (
+          <Space>
+            <Button size="small" type="primary" loading={writingChapter === r.num}
+              onClick={() => writeChapter(r.num)} disabled={status === 'pending_review'}>
+              {status === 'not_started' ? '写作' : '重写'}
+            </Button>
+            <Button size="small" onClick={() => viewChapterContent(r.num)}>查看</Button>
+            <Button size="small" onClick={() => showRollbackVersions(r.num)}>版本/回滚</Button>
+            <Button size="small" type="default" onClick={() => requestReview(r.num)}
+              disabled={status !== 'draft' && status !== 'approved' && status !== 'needs_revision'}>
+              人工复审
+            </Button>
+          </Space>
+        );
+      }
+    }
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center' }}>
-        <Link href="/">
-          <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
-            <BookOutlined /> Novel Agent
-          </Title>
-        </Link>
-        <span style={{ marginLeft: 'auto', color: '#888' }}>
-          当前小说：《{outline.title || '未命名'}》
-        </span>
-      </Header>
-      
-      <Layout>
-        <Sider width={200} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-          <Menu
-            mode="inline"
-            defaultSelectedKeys={['outline']}
-            style={{ height: '100%', borderRight: 0 }}
-            items={menuItems}
+    <div style={{padding:20,background:'#f5f5f5',minHeight:'100vh'}}>
+      <Card>
+        <h1>{outline.title||'未命名'}</h1>
+        <div><Tag>{novel?.genre}</Tag><Tag>{chapters.length}章</Tag></div>
+        <Tabs items={[
+          {key:'o',label:'大纲',children:<Card size="small"><Descriptions column={2}><Descriptions.Item label="开头">{outline.main_plot?.beginning}</Descriptions.Item><Descriptions.Item label="高潮">{outline.main_plot?.climax}</Descriptions.Item></Descriptions></Card>},
+          {key:'c',label:'角色',children:<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,200px)',gap:16}}>{chars.map((c:any,i:number)=><Card key={i} size="small"><Tag color={c.role==='主角'?'red':'blue'}>{c.role}</Tag><p>{c.name}</p></Card>)}</div>},
+          {key:'ch',label:'章节',children:<Table dataSource={chapters} rowKey="num" size="small" pagination={false} columns={chapterColumns}/>}
+        ]}/>
+      </Card>
+
+      {/* 查看章节内容弹窗 */}
+      <Modal title={`第${reviewModal.chapterNum}章内容`} open={reviewModal.visible} onCancel={()=>setReviewModal({visible:false,chapterNum:0,content:''})} width={800} footer={null}>
+        <div style={{maxHeight: 400, overflow: 'auto', whiteSpace: 'pre-wrap'}}>{reviewModal.content}</div>
+      </Modal>
+
+      {/* 回滚弹窗 */}
+      <Modal title={`第${rollbackModal.chapterNum}章版本历史`} open={rollbackModal.visible} onCancel={()=>setRollbackModal({visible:false,chapterNum:0,versions:[]})} footer={null}>
+        {rollbackModal.versions.length === 0 ? <p>暂无版本记录</p> : (
+          <Table size="small" dataSource={rollbackModal.versions} rowKey="version_num" pagination={false}
+            columns={[
+              { title: '版本', dataIndex: 'version_num', key: 'version_num' },
+              { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => getStatusTag(s) },
+              { title: '字数', dataIndex: 'word_count', key: 'word_count' },
+              { title: '创建者', dataIndex: 'created_by', key: 'created_by' },
+              { title: '时间', dataIndex: 'created_at', key: 'created_at' },
+              { 
+                title: '操作', 
+                key: 'action',
+                render: (_: any, r: any) => (
+                  <Button size="small" onClick={() => doRollback(r.version_num)}>回滚到此版本</Button>
+                )
+              }
+            ]}
           />
-        </Sider>
-        
-        <Content style={{ padding: '24px', background: '#f5f5f5' }}>
-          <Card>
-            <div style={{ marginBottom: 16 }}>
-              <Title level={3} style={{ margin: 0 }}>
-                📚 {outline.title || '未命名小说'}
-              </Title>
-              <div style={{ marginTop: 8 }}>
-                <Tag color="purple">{novel.genre}</Tag>
-                <Tag color="blue">{chapters.length} 章</Tag>
-                <Tag color="green">{characters.length} 角色</Tag>
-              </div>
-            </div>
-            
-            <Tabs 
-              activeKey={activeTab} 
-              onChange={setActiveTab} 
-              items={tabItems}
-            />
-          </Card>
-        </Content>
-      </Layout>
-    </Layout>
+        )}
+        {rollbackModal.versions.length > 1 && (
+          <div style={{marginTop: 16}}>
+            <Button type="primary" danger onClick={() => doRollback()}>回滚到上一版本</Button>
+          </div>
+        )}
+      </Modal>
+    </div>
   );
 }
